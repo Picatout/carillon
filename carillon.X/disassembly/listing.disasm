@@ -1,0 +1,208 @@
+Disassembly Listing for carillon
+Generated From:
+C:/Users/Jacques/Documents/GitHub/carillon/carillon.X/dist/default/production/carillon.X.production.cof
+2013-03-22 22:08:32
+
+---  C:/Users/Jacques/Documents/GitHub/carillon/carillon.X/carillon.asm  --------------------------------
+                                                  1:     ;NOM: carillon
+                                                  2:     ;DESCRIPTION: carillon électronique
+                                                  3:     ;MCU: PIC10F202
+                                                  4:     ;DATE: 2013-03-21
+                                                  5:     ;AUTEUR: Jacques Deschênes
+                                                  6:     
+                                                  7:     
+                                                  8:         include p10f202.inc
+                                                  9:         include "c:\microchip\include\base-macro.inc"
+                                                  10:    
+                                                  11:    
+                                                  12:        __config _WDTE_OFF & _MCLRE_OFF
+                                                  13:    
+                                                  14:    ;;;;;;;;;; constantes ;;;;;;;;;;;;;;;;;;
+                                                  15:    OPTION_CFG EQU B'10000010' ; prescale TIMER0=1/8
+                                                  16:    TRIS_CFG EQU B'1001'
+                                                  17:    
+                                                  18:    ATTACK EQU D'50'*D'125'  ; durée phase croissante
+                                                  19:    WHOLE   EQU D'1500'*D'125' ; durée note ronde
+                                                  20:    
+                                                  21:    
+                                                  22:    AUDIO_P EQU GP1 ; sortie audio
+                                                  23:    ENV_P EQU GP2   ; contrôle enveloppe
+                                                  24:    BTN_P EQU GP3
+                                                  25:    
+                                                  26:    F_DECAY  EQU 0
+                                                  27:    
+                                                  28:    ;;;;;;;;; macros ;;;;;;;;;;;;;;;;;;;;;;;
+                                                  29:    #define AUDIO  GPIO, AUDIO_P
+                                                  30:    #define ENV    GPIO, ENV_P
+                                                  31:    #define BTN    GPIO, BTN_P
+                                                  32:    
+                                                  33:    
+                                                  34:    
+                                                  35:    
+                                                  36:    
+                                                  37:    ;;;;;;;;; variables ;;;;;;;;;;;;;;;;;;;;
+                                                  38:        udata
+                                                  39:    flags res 1  ; indicateurs booléen
+                                                  40:    timeout res 3  ; compteur délais durée phase enveloppe.
+                                                  41:    half_delay res 1 ; compteur délais demi-période
+                                                  42:    half_period res 1 ; durée demi-période
+                                                  43:    ring_idx res 1 ; indice accès ring_table
+                                                  44:    duration res 3 ;
+                                                  45:    temp res 1
+                                                  46:    
+                                                  47:    ;;;;;;;;; code ;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  48:    rst_vector org 0
+0000  0A51     GOTO 0x51                          49:        goto init
+                                                  50:    
+                                                  51:    tone_table ; délais demi-cycle  mulitple de 8 micro-secondes complément de 2.
+0001  01E2     ADDWF PCL, F                       52:        addwf PCL, F
+0002  0811     RETLW 0x11                         53:        dt .17  ;0 C3 (do) 261,6 Hz
+0003  081F     RETLW 0x1F                         54:        dt .31  ;1 C#
+0004  082B     RETLW 0x2B                         55:        dt .43  ;2 D (ré)
+0005  0837     RETLW 0x37                         56:        dt .55  ;3 D#
+0006  0842     RETLW 0x42                         57:        dt .66  ;4 E  (mi)
+0007  084D     RETLW 0x4D                         58:        dt .77  ;5 F  (fa)
+0008  0857     RETLW 0x57                         59:        dt .87  ;6 F#
+0009  0861     RETLW 0x61                         60:        dt .97  ;7 G  (sol)
+000A  086A     RETLW 0x6A                         61:        dt .106 ;8 G#
+000B  0872     RETLW 0x72                         62:        dt .114 ;9 A  (la)
+000C  087A     RETLW 0x7A                         63:        dt .122 ;10 A#
+000D  0881     RETLW 0x81                         64:        dt .129 ;11 B  (si)
+000E  0889     RETLW 0x89                         65:        dt .137 ;12 C4 (do)
+000F  088F     RETLW 0x8F                         66:        dt .143 ;13 C#
+0010  0896     RETLW 0x96                         67:        dt .150 ;14 D  (ré)
+0011  089C     RETLW 0x9C                         68:        dt .156 ;15 D#
+0012  08A1     RETLW 0xA1                         69:        dt .161 ;16 E  (mi)
+0013  08A7     RETLW 0xA7                         70:        dt .167 ;17 F  (fa)
+0014  08AC     RETLW 0xAC                         71:        dt .172 ;18 F#
+0015  08B0     RETLW 0xB0                         72:        dt .176 ;19 G  (sol)
+0016  08B5     RETLW 0xB5                         73:        dt .181 ;20 G#
+0017  08B9     RETLW 0xB9                         74:        dt .185 ;21 A  (la)
+0018  08BD     RETLW 0xBD                         75:        dt .189 ;22 A#
+0019  08C1     RETLW 0xC1                         76:        dt .193 ;23 B5 (si) 987,8Hz
+                                                  77:    
+                                                  78:    ring_table ; durée, note....
+001A  01E2     ADDWF PCL, F                       79:        addwf PCL, F
+001B  0801     RETLW 0x1                          80:        dt .1, .12
+001C  080C     RETLW 0xC
+001D  0801     RETLW 0x1                          81:        dt .1,.16
+001E  0810     RETLW 0x10
+001F  0802     RETLW 0x2                          82:        dt .2, .14
+0020  080E     RETLW 0xE
+0021  0802     RETLW 0x2                          83:        dt .2, .11
+0022  080B     RETLW 0xB
+0023  0802     RETLW 0x2                          84:        dt .2, .12
+0024  080C     RETLW 0xC
+0025  0802     RETLW 0x2                          85:        dt .2, .7
+0026  0807     RETLW 0x7
+0027  0800     RETLW 0x0                          86:        dt .0, .0
+0028  0800     RETLW 0x0
+                                                  87:    
+                                                  88:    
+                                                  89:    ;;;;;;;;;;;;; tone  ;;;;;;;;;;;;;
+                                                  90:    ; entrées:
+                                                  91:    ;  w = note :
+                                                  92:    ;  dly1 = durée phase croissante
+                                                  93:    ;  dly2 = durée phase décroissante
+                                                  94:    tone
+                                                  95:    ;phase croissante
+0029  0901     CALL 0x1                           96:        call tone_table
+002A  002D     MOVWF 0xD                          97:        movwf half_period
+002B  0408     BCF 0x8, 0x0                       98:        bcf flags, F_DECAY
+002C  0C6A     MOVLW 0x6A                         99:        movlw  ATTACK & H'FF'
+002D  0029     MOVWF 0x9                          100:       movwf timeout
+002E  0C18     MOVLW 0x18                         101:       movlw  (ATTACK>>8) & H'FF'
+002F  002A     MOVWF 0xA                          102:       movwf timeout+1
+0030  0C00     MOVLW 0x0                          103:       movlw (ATTACK>>16) & H'FF'
+0031  002B     MOVWF 0xB                          104:       movwf timeout+2
+0032  0546     BSF GPIO, 0x2                      105:       bsf ENV
+0033  0061     CLRF TMR0                          106:       clrf TMR0
+                                                  107:   tone01
+0034  0201     MOVF TMR0, W                       108:       movfw TMR0
+0035  0743     BTFSS STATUS, 0x2                  109:       skpz
+0036  0A34     GOTO 0x34                          110:       goto $-2
+0037  020D     MOVF 0xD, W                        111:       movfw half_period
+0038  0021     MOVWF TMR0                         112:       movwf TMR0
+0039  0C02     MOVLW 0x2                          113:       movlw 1<<AUDIO_P
+003A  01A6     XORWF GPIO, F                      114:       xorwf GPIO, F  ; commute la sortie son
+003B  020D     MOVF 0xD, W                        115:       movfw half_period
+003C  01E9     ADDWF 0x9, F                       116:       addwf timeout, F
+003D  0703     BTFSS STATUS, 0x0                  117:       skpc
+003E  0A34     GOTO 0x34                          118:       goto tone01
+003F  0C01     MOVLW 0x1                          119:       movlw 1
+0040  00AA     SUBWF 0xA, F                       120:       subwf timeout+1, F
+0041  0603     BTFSC STATUS, 0x0                  121:       skpnc
+0042  0A34     GOTO 0x34                          122:       goto tone01
+0043  00AB     SUBWF 0xB, F                       123:       subwf timeout+2, F
+0044  0603     BTFSC STATUS, 0x0                  124:       skpnc
+0045  0A34     GOTO 0x34                          125:       goto tone01
+0046  0608     BTFSC 0x8, 0x0                     126:       btfsc flags, F_DECAY
+0047  0800     RETLW 0x0                          127:       return
+0048  020F     MOVF 0xF, W                        128:       movfw duration
+0049  0029     MOVWF 0x9                          129:       movwf  timeout
+004A  0210     MOVF 0x10, W                       130:       movfw duration+1
+004B  002A     MOVWF 0xA                          131:       movwf timeout+1
+004C  0211     MOVF 0x11, W                       132:       movfw duration+2
+004D  002B     MOVWF 0xB                          133:       movwf timeout+2
+004E  0508     BSF 0x8, 0x0                       134:       bsf flags, F_DECAY
+004F  0446     BCF GPIO, 0x2                      135:       bcf ENV
+0050  0A34     GOTO 0x34                          136:       goto tone01
+                                                  137:   
+                                                  138:   
+                                                  139:   
+                                                  140:   
+                                                  141:   ;;;;;;;;; initialisation MCU ;;;;;;;;;;;
+                                                  142:   init
+0051  0C0C     MOVLW 0xC                          143:       movlw D'12'
+0052  0025     MOVWF OSCCAL                       144:       movwf OSCCAL
+0053  0405     BCF OSCCAL, 0x0                    145:       bcf OSCCAL, 0
+0054  0C82     MOVLW 0x82                         146:       movlw OPTION_CFG
+0055  0002     OPTION                             147:       option
+0056  0C09     MOVLW 0x9                          148:       movlw TRIS_CFG
+0057  0006     TRIS GPIO                          149:       tris GPIO
+                                                  150:   
+                                                  151:   ;;;;;;;;; procédure principale ;;;;;;;;;
+                                                  152:   main
+0058  0666     BTFSC GPIO, 0x3                    153:       btfsc BTN
+0059  0A58     GOTO 0x58                          154:       goto $-1
+005A  006E     CLRF 0xE                           155:       clrf ring_idx
+                                                  156:   ring_loop
+005B  0C6C     MOVLW 0x6C                         157:       movlw WHOLE & H'FF'
+005C  002F     MOVWF 0xF                          158:       movwf duration
+005D  0CDC     MOVLW 0xDC                         159:       movlw (WHOLE>>8) & H'FF'
+005E  0030     MOVWF 0x10                         160:       movwf duration+1
+005F  0C02     MOVLW 0x2                          161:       movlw (WHOLE>>D'16') & H'FF'
+0060  0031     MOVWF 0x11                         162:       movwf duration+2
+0061  020E     MOVF 0xE, W                        163:       movfw ring_idx
+0062  091A     CALL 0x1A                          164:       call ring_table ; durée
+0063  0032     MOVWF 0x12                         165:       movwf temp
+0064  0232     MOVF 0x12, F                       166:       movf  temp, F
+0065  0643     BTFSC STATUS, 0x2                  167:       skpnz
+0066  0A6D     GOTO 0x6D                          168:       goto get_note
+                                                  169:   divide_duration
+0067  0403     BCF STATUS, 0x0                    170:       clrc
+0068  0331     RRF 0x11, F                        171:       rrf duration+2, F
+0069  0330     RRF 0x10, F                        172:       rrf duration+1,F
+006A  032F     RRF 0xF, F                         173:       rrf duration,F
+006B  02F2     DECFSZ 0x12, F                     174:       decfsz temp, F
+006C  0A67     GOTO 0x67                          175:       goto divide_duration
+                                                  176:   get_note
+006D  02AE     INCF 0xE, F                        177:       incf ring_idx, F
+006E  020E     MOVF 0xE, W                        178:       movfw ring_idx
+006F  091A     CALL 0x1A                          179:       call ring_table
+0070  0F00     XORLW 0x0                          180:       xorlw 0
+0071  0643     BTFSC STATUS, 0x2                  181:       skpnz
+0072  0A76     GOTO 0x76                          182:       goto ring_end
+0073  0929     CALL 0x29                          183:       call tone
+0074  02AE     INCF 0xE, F                        184:       incf ring_idx, F
+0075  0A5B     GOTO 0x5B                          185:       goto ring_loop
+                                                  186:   ring_end
+0076  0766     BTFSS GPIO, 0x3                    187:       btfss BTN
+0077  0A76     GOTO 0x76                          188:       goto ring_end
+0078  0A58     GOTO 0x58                          189:       goto main
+                                                  190:   
+0FFF  0000     NOP                                191:       end
+                                                  192:   
+                                                  193:   
+                                                  194:   
+                                                  195:   
