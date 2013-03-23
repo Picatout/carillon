@@ -1,4 +1,4 @@
-EESchema Schematic File Version 2  date 2013-03-22 22:48:29
+EESchema Schematic File Version 2  date 2013-03-23 08:24:05
 LIBS:power
 LIBS:device
 LIBS:transistors
@@ -524,7 +524,7 @@ L C C3
 U 1 1 514B17E6
 P 5900 4650
 F 0 "C3" H 5950 4750 50  0000 L CNN
-F 1 "100nF" H 5950 4550 50  0000 L CNN
+F 1 "150nF" H 5950 4550 50  0000 L CNN
 F 2 "" H 5900 4650 60  0001 C CNN
 F 3 "" H 5900 4650 60  0001 C CNN
 	1    5900 4650
